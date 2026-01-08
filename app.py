@@ -13,15 +13,21 @@ def extract_username_from_url(url):
     https://accounts.google.com/signin/v2/speedbump/changepassword
     → speedbump
     """
-    try:
-        path_parts = urlparse(url).path.split("/")
-        path_parts = [p for p in path_parts if p]
+    ignore = {
+        "signin", "signup", "login", "auth",
+        "v1", "v2", "v3",
+        "changepassword", "resetpassword",
+        "password", "account", "accounts"
+    }
 
-        # choose middle meaningful part
-        if len(path_parts) >= 3:
-            return path_parts[2]
-        elif len(path_parts) >= 1:
-            return path_parts[-1]
+    try:
+        path_parts = [
+            p for p in urlparse(url).path.split("/")
+            if p and p.lower() not in ignore
+        ]
+
+        if path_parts:
+            return path_parts[0]
     except:
         pass
 
@@ -46,18 +52,45 @@ def check_leak():
             line = line.strip()
 
             if query in line:
-                # Example format:
-                # URL username:password
-                parts = line.split()
-
-                url = parts[0]
-                creds = parts[1] if len(parts) > 1 else ""
-
+                url = ""
+                username = ""
                 password = ""
-                if ":" in creds:
-                    password = creds.split(":")[0]
 
-                username = extract_username_from_url(url)
+                kv_pairs = {}
+
+                # Parse key=value pairs separated by ;
+                for part in [p.strip() for p in line.split(";") if p.strip()]:
+                    if "=" in part:
+                        k, v = part.split("=", 1)
+                        kv_pairs[k.strip().lower()] = v.strip()
+
+                if kv_pairs:
+                    url = kv_pairs.get("url", "") or kv_pairs.get("link", "")
+                    username = kv_pairs.get("username", "") or kv_pairs.get("user", "")
+                    password = kv_pairs.get("password", "") or kv_pairs.get("pass", "")
+                else:
+                    parts = line.split()
+                    if parts:
+                        url = parts[0]
+                        creds = parts[1] if len(parts) > 1 else ""
+
+                        if ":" in creds:
+                            username, password = creds.split(":", 1)
+                        elif "=" in creds:
+                            k, v = creds.split("=", 1)
+                            if k.lower() in ("password", "pass"):
+                                password = v
+                            elif k.lower() in ("username", "user"):
+                                username = v
+
+                if url and not username:
+                    username = extract_username_from_url(url)
+
+                if not url:
+                    for token in line.split():
+                        if token.startswith("http://") or token.startswith("https://"):
+                            url = token
+                            break
 
                 results.append({
                     "url": url,
