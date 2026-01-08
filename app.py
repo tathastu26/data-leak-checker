@@ -1,9 +1,13 @@
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 from flask import Flask, request, jsonify
 from urllib.parse import urlparse
 
+
 app = Flask(__name__)
 
-LEAK_FILE = "leaks.txt"
+LEAK_FILE = "leaks1.txt"
 
 
 def extract_username_from_url(url):
